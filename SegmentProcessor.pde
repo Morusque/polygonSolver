@@ -1,19 +1,24 @@
-
+ //<>//
 class SegmentProcessor {
 
   ArrayList<Segment> segments = new ArrayList<Segment>();
   ArrayList<ArrayList<Vertex>> shapes = new ArrayList<ArrayList<Vertex>>(); // Stores detected polygons as lists of vertices
   ArrayList<Vertex> vertices = new ArrayList<Vertex>(); // All vertices used in the system
 
+  float vertexEpsilon = 0.001; // how close two vertices have to be for the algorithm to consider them equal
+
   // Convert raw input segments into shapes and return as ArrayList<PVector[]>
   public ArrayList<PVector[]> convertSegmentsToShapes(ArrayList<PVector[]> inputSegments) {
-    for (PVector[] inputSegment : inputSegments) 
+    segments.clear();
+    shapes.clear();
+    vertices.clear();
+    for (PVector[] inputSegment : inputSegments)
       segments.add(new Segment(inputSegment[0], inputSegment[1], null, null)); // Initialize segments with no connections
 
     intersectSegments(); // Split segments at intersections and bind them to vertices
-    for (Segment s : segments) 
+    for (Segment s : segments)
       s.informVertex(); // Notify vertices about their connected segments
-    for (Vertex v : vertices) 
+    for (Vertex v : vertices)
       v.trimDeadEnds(); // Remove invalid or unused connections
 
     extractPolygons(); // Group segments into polygons
@@ -61,6 +66,8 @@ class SegmentProcessor {
       Vertex v = new Vertex();
       v.pos = intersection.copy();
 
+      for (Vertex v2 : vertices) if (PVector.dist(v.pos, v2.pos)<vertexEpsilon) v=v2;
+
       // Create new segments split at the intersection point
       segmentsToAdd.add(new Segment(sA.a, v.pos, sA.aConnected, v));
       segmentsToAdd.add(new Segment(sA.b, v.pos, sA.bConnected, v));
@@ -75,15 +82,20 @@ class SegmentProcessor {
 
   // Find the next vertex in a shape, ensuring a closed polygon
   Vertex nextVertexAfter(Vertex a, Vertex b) {
-    if (!b.next.contains(a)) return null; // Non-reciprocal vertex connection, unexpected
-
+    // Handle unexpected or edge cases with b.next
+    if (b.next.isEmpty()) return null; // No connections, invalid vertex
+    if (b.next.size() == 1) return null; // Dead-end vertex, unexpected in a polygon
+    if (b.next.size() == 2) { // Degenerate "flat" polygon
+      if (b.next.get(0) == b.next.get(1)) {
+        return b.next.get(0); // Return the single valid connection
+      }
+    }
     Vertex bestC = null;
     boolean stop = false;
-
-    for (int j = 0; !stop; j = (j + 1) % b.next.size()) {
+    for (int j = 0; !stop; j = (j + 1) % b.next.size()) {// Main loop to find the next vertex
       Vertex c = b.next.get(j);
       if (c == a) {
-        if (bestC != null) stop = true;
+        if (bestC != null) stop = true; // Stop once we have found the next valid vertex
       } else {
         bestC = c;
       }
@@ -93,7 +105,6 @@ class SegmentProcessor {
 
   // Extract polygons from connected segments and vertices
   void extractPolygons() {
-    shapes.clear();
 
     for (Vertex startingVertex : vertices) {
       for (int i = 0; i < startingVertex.next.size(); i++) {
@@ -104,11 +115,9 @@ class SegmentProcessor {
         verticesInShape.add(b);
 
         boolean shapeDone = false;
-
         while (!shapeDone) {
           if (b.next.size() >= 2) {
             Vertex c = nextVertexAfter(a, b);
-
             if (c == startingVertex) {
               shapeDone = true;
               if (!shapeAlreadyExists(verticesInShape) && !isClockwise(verticesInShape)) {
@@ -140,7 +149,6 @@ class SegmentProcessor {
   boolean shapeAlreadyExists(ArrayList<Vertex> verticesHere) {
     for (ArrayList<Vertex> existingShape : shapes) {
       if (existingShape.size() != verticesHere.size()) continue;
-
       boolean isDuplicate = true;
       for (Vertex v : verticesHere) {
         if (!existingShape.contains(v)) isDuplicate = false;
@@ -148,7 +156,6 @@ class SegmentProcessor {
       for (Vertex v : existingShape) {
         if (!verticesHere.contains(v)) isDuplicate = false;
       }
-
       if (isDuplicate) return true;
     }
     return false;
@@ -170,9 +177,9 @@ class SegmentProcessor {
   // Compute intersection of two line segments (null if no intersection)
   PVector lineSegmentIntersection(PVector p1A, PVector p1B, PVector p2A, PVector p2B) {
     if (Math.max(p1A.x, p1B.x) < Math.min(p2A.x, p2B.x) ||
-        Math.min(p1A.x, p1B.x) > Math.max(p2A.x, p2B.x) ||
-        Math.max(p1A.y, p1B.y) < Math.min(p2A.y, p2B.y) ||
-        Math.min(p1A.y, p1B.y) > Math.max(p2A.y, p2B.y)) {
+      Math.min(p1A.x, p1B.x) > Math.max(p2A.x, p2B.x) ||
+      Math.max(p1A.y, p1B.y) < Math.min(p2A.y, p2B.y) ||
+      Math.min(p1A.y, p1B.y) > Math.max(p2A.y, p2B.y)) {
       return null; // Bounding boxes do not overlap
     }
 
@@ -182,7 +189,7 @@ class SegmentProcessor {
     float s = (-s1.y * (p1A.x - p2A.x) + s1.x * (p1A.y - p2A.y)) / (-s2.x * s1.y + s1.x * s2.y);
     float t = ( s2.x * (p1A.y - p2A.y) - s2.y * (p1A.x - p2A.x)) / (-s2.x * s1.y + s1.x * s2.y);
 
-    if (s >= 0 && s <= 1 && t >= 0 && t <= 1) 
+    if (s >= 0 && s <= 1 && t >= 0 && t <= 1)
       return new PVector(p1A.x + (t * s1.x), p1A.y + (t * s1.y));
 
     return null; // No intersection
