@@ -1,27 +1,26 @@
  //<>//
-class SegmentProcessor {
+static class SegmentProcessor {
 
-  ArrayList<Segment> segments = new ArrayList<Segment>();
-  ArrayList<ArrayList<Vertex>> shapes = new ArrayList<ArrayList<Vertex>>(); // Stores detected polygons as lists of vertices
-  ArrayList<Vertex> vertices = new ArrayList<Vertex>(); // All vertices used in the system
-
-  float vertexEpsilon = 0.001; // how close two vertices have to be for the algorithm to consider them equal
+  // Static factory method for one-off usage
+  public static ArrayList<PVector[]> processSegments(ArrayList<PVector[]> inputSegments) {
+    return new SegmentProcessor().convertSegmentsToShapes(inputSegments);
+  }
 
   // Convert raw input segments into shapes and return as ArrayList<PVector[]>
   public ArrayList<PVector[]> convertSegmentsToShapes(ArrayList<PVector[]> inputSegments) {
-    segments.clear();
-    shapes.clear();
-    vertices.clear();
-    for (PVector[] inputSegment : inputSegments)
-      segments.add(new Segment(inputSegment[0], inputSegment[1], null, null)); // Initialize segments with no connections
 
-    intersectSegments(); // Split segments at intersections and bind them to vertices
-    for (Segment s : segments)
-      s.informVertex(); // Notify vertices about their connected segments
-    for (Vertex v : vertices)
-      v.trimDeadEnds(); // Remove invalid or unused connections
+    ArrayList<Segment> segments = new ArrayList<Segment>();
+    ArrayList<ArrayList<Vertex>> shapes = new ArrayList<ArrayList<Vertex>>(); // Stores detected polygons as lists of vertices
+    ArrayList<Vertex> vertices = new ArrayList<Vertex>(); // All vertices used in the system
 
-    extractPolygons(); // Group segments into polygons
+    for (PVector[] inputSegment : inputSegments) {
+      segments.add(new Segment(inputSegment[0], inputSegment[1], null, null));
+    }
+
+    intersectSegments(segments, vertices); // Pass local state to helper methods
+    for (Segment s : segments) s.informVertex();
+    for (Vertex v : vertices) v.trimDeadEnds();
+    extractPolygons(shapes, vertices);
 
     // Convert polygons into ArrayList<PVector[]>
     ArrayList<PVector[]> shapeVectors = new ArrayList<>();
@@ -32,11 +31,12 @@ class SegmentProcessor {
       }
       shapeVectors.add(verticesArray);
     }
+
     return shapeVectors;
   }
 
   // Identify and process intersections between segments
-  void intersectSegments() {
+  void intersectSegments(ArrayList<Segment> segments, ArrayList<Vertex> vertices) {
     boolean stillCutting = true;
 
     while (stillCutting) {
@@ -47,7 +47,7 @@ class SegmentProcessor {
         for (Segment sB : segments) {
           // Skip redundant comparisons and processed segments
           if (sA != sB && !segmentsToDelete.contains(sA) && !segmentsToDelete.contains(sB)) {
-            processIntersection(sA, sB, segmentsToAdd, segmentsToDelete);
+            processIntersection(sA, sB, segmentsToAdd, segmentsToDelete, vertices);
           }
         }
       }
@@ -59,7 +59,10 @@ class SegmentProcessor {
   }
 
   // Process the intersection of two segments, splitting them if necessary
-  void processIntersection(Segment sA, Segment sB, ArrayList<Segment> segmentsToAdd, ArrayList<Segment> segmentsToDelete) {
+  void processIntersection(Segment sA, Segment sB, ArrayList<Segment> segmentsToAdd, ArrayList<Segment> segmentsToDelete, ArrayList<Vertex> vertices) {
+
+    float vertexEpsilon = 0.001; // how close two vertices have to be for the algorithm to consider them equal
+
     PVector intersection = lineSegmentIntersection(sA.a, sA.b, sB.a, sB.b);
 
     if (intersection != null && !shareAVertex(sA, sB)) {
@@ -104,7 +107,7 @@ class SegmentProcessor {
   }
 
   // Extract polygons from connected segments and vertices
-  void extractPolygons() {
+  void extractPolygons(ArrayList<ArrayList<Vertex>> shapes, ArrayList<Vertex> vertices) {
 
     for (Vertex startingVertex : vertices) {
       for (int i = 0; i < startingVertex.next.size(); i++) {
@@ -120,7 +123,7 @@ class SegmentProcessor {
             Vertex c = nextVertexAfter(a, b);
             if (c == startingVertex) {
               shapeDone = true;
-              if (!shapeAlreadyExists(verticesInShape) && !isClockwise(verticesInShape)) {
+              if (!shapeAlreadyExists(verticesInShape,shapes) && !isClockwise(verticesInShape)) {
                 shapes.add(new ArrayList<>(verticesInShape));
               }
             } else {
@@ -146,7 +149,7 @@ class SegmentProcessor {
   }
 
   // Check if a polygon already exists in the shapes list
-  boolean shapeAlreadyExists(ArrayList<Vertex> verticesHere) {
+  boolean shapeAlreadyExists(ArrayList<Vertex> verticesHere, ArrayList<ArrayList<Vertex>> shapes) {
     for (ArrayList<Vertex> existingShape : shapes) {
       if (existingShape.size() != verticesHere.size()) continue;
       boolean isDuplicate = true;

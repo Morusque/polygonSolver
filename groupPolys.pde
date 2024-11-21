@@ -7,7 +7,7 @@ void setup() {
   for (int i = 0; i < 100; i++) segments.add(new PVector[] {new PVector((i * 23) % width, (i * 27) % height), new PVector((i * 30) % width, (i * 32) % height)});
   
   // convert the segments into a list of smallest closed non-overlapping polygons
-  ArrayList<PVector[]> shapes = new SegmentProcessor().convertSegmentsToShapes(segments);
+  ArrayList<PVector[]> shapes = SegmentProcessor.processSegments(segments);
   
   // draw the result
   background(0);
