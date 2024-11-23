@@ -66,10 +66,17 @@ static class SegmentProcessor {
     PVector intersection = lineSegmentIntersection(sA.a, sA.b, sB.a, sB.b);
 
     if (intersection != null && !shareAVertex(sA, sB)) {
+
       Vertex v = new Vertex();
       v.pos = intersection.copy();
 
-      for (Vertex v2 : vertices) if (PVector.dist(v.pos, v2.pos)<vertexEpsilon) v=v2;
+      boolean newVertex = true;
+      for (Vertex v2 : vertices) {
+        if (PVector.dist(v.pos, v2.pos)<vertexEpsilon) {
+          v=v2;
+          newVertex = false;
+        }
+      }
 
       // Create new segments split at the intersection point
       segmentsToAdd.add(new Segment(sA.a, v.pos, sA.aConnected, v));
@@ -79,7 +86,7 @@ static class SegmentProcessor {
 
       segmentsToDelete.add(sA);
       segmentsToDelete.add(sB);
-      vertices.add(v); // Add the new vertex to the global list
+      if (newVertex) vertices.add(v); // Add the new vertex to the global list
     }
   }
 
@@ -123,7 +130,7 @@ static class SegmentProcessor {
             Vertex c = nextVertexAfter(a, b);
             if (c == startingVertex) {
               shapeDone = true;
-              if (!shapeAlreadyExists(verticesInShape,shapes) && !isClockwise(verticesInShape)) {
+              if (!shapeAlreadyExists(verticesInShape, shapes) && !isClockwise(verticesInShape)) {
                 shapes.add(new ArrayList<>(verticesInShape));
               }
             } else {
